@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { Tag } from '../types';
 import { captureFramesAsBase64 } from '../utils';
@@ -14,7 +15,6 @@ import { Header } from './art/Header';
 import { Sidebar } from './art/Sidebar';
 import { Step1Input } from './art/steps/Step1Input';
 import { Step2Base } from './art/steps/Step2Base';
-import { Step3Avatar } from './art/steps/Step3Avatar';
 import { Step4Final } from './art/steps/Step4Final';
 import { Step5Refine } from './art/steps/Step5Refine';
 import { WorkflowStep } from './art/types';
@@ -26,8 +26,6 @@ interface ArtGalleryProps {
   videoContent?: string;
   onClose: () => void;
 }
-
-const DEFAULT_PROMPT = `将这些图片转换为可爱的、手绘风格的插图，以描绘整个过程。要有明显的手绘风格，主体的形状和颜色不应有太大变化，要真实反映原图像本身的特性。每一步的插图应尽可能独立且完整，并且小图片之间应有足够的间距。为每个步骤编号，并用简短描述。除了步骤描述外，不要添加任何不必要的文字。每一步的插图和整体插图都要以纯白色为背景`;
 
 export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTitle, videoContent, onClose }) => {
   // Strategy Selection State
@@ -71,7 +69,7 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
 
   const [showSettings, setShowSettings] = useState(false);
 
-  const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
+  const [customPrompt, setCustomPrompt] = useState('');
   
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
@@ -81,6 +79,9 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
   const [error, setError] = useState<string | null>(null);
   
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  
+  // Controls which step is expanded in Sidebar AND which view is shown on right
+  const [viewStep, setViewStep] = useState<number>(1);
   
   // Initialize gallery by capturing frames IMMEDIATELY (Parallel with Platform Selection)
   useEffect(() => {
@@ -100,7 +101,7 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
         };
         initGallery();
     }
-  }, [tags, videoUrl]); // Removed activeStrategy dependency
+  }, [tags, videoUrl]);
 
   useEffect(() => {
     localStorage.setItem('gemini_api_key', apiKey);
@@ -113,6 +114,13 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
   useEffect(() => {
     if (videoContent) setContextDescription(videoContent);
   }, [videoContent]);
+
+  // Update customPrompt when strategy changes
+  useEffect(() => {
+    if (activeStrategy) {
+      setCustomPrompt(activeStrategy.defaultImagePrompt);
+    }
+  }, [activeStrategy]);
 
   const handleCopyCaption = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
@@ -161,7 +169,6 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarImage(reader.result as string);
-        // If we are already past base generation, entering avatar upload suggests we might want to integrate
         if (workflowStep === 'base_generated') {
           setWorkflowStep('avatar_mode');
         }
@@ -174,17 +181,20 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
     setError(err.message || "发生未知错误。");
   };
 
-  // Step 0: Analyze Frames
+  // Step 1: Analyze Frames
   const handleAnalyzeSteps = async () => {
     if (sourceFrames.length === 0 || !activeStrategy) return;
     
-    // RESET FUTURE STEPS to enforce sequential flow
-    setStepDescriptions([]); // This hides Step 2 immediately in Sidebar
+    // RESET FUTURE STEPS
+    setStepDescriptions([]);
     setBaseArt(null);
     setGeneratedArt(null);
     setSubPanels([]);
     setCaptionOptions([]);
     setWorkflowStep('input');
+    
+    // Force view back to step 1 during retry
+    setViewStep(1);
 
     setIsAnalyzingSteps(true);
     setError(null);
@@ -200,6 +210,8 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
         provider
       );
       setStepDescriptions(steps);
+      // Auto-advance to Step 2
+      setViewStep(2);
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -207,19 +219,21 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
     }
   };
 
-  // Step 1: Generate Base Storyboard
+  // Step 2: Generate Base Storyboard
   const handleGenerateBase = async () => {
     if (sourceFrames.length === 0 || !activeStrategy) {
       setError("没有可处理的图片帧。");
       return;
     }
 
-    // RESET FUTURE STEPS to prevent stale state
+    // RESET FUTURE STEPS
     setSubPanels([]);
     setCaptionOptions([]);
-    // Clearing generated art forces Step 3/4/5 to hide on retry
     setBaseArt(null);
     setGeneratedArt(null);
+    
+    // Ensure we are viewing step 2 during generation
+    setViewStep(2);
     
     setIsGeneratingImage(true);
     setError(null);
@@ -239,6 +253,8 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
       setBaseArt(img);
       setGeneratedArt(img);
       setWorkflowStep('base_generated');
+      // Auto-advance to Step 3
+      setViewStep(3);
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -246,7 +262,7 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
     }
   };
 
-  // Step 2: Integrate Character
+  // Step 3: Integrate Character
   const handleIntegrateCharacter = async () => {
     if (!baseArt || !avatarImage) {
       setError("缺少基础绘图或形象图片。");
@@ -255,6 +271,9 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
 
     // RESET FUTURE STEPS
     setSubPanels([]);
+    
+    // Ensure we are viewing step 3
+    setViewStep(3);
     
     setIsGeneratingImage(true);
     setError(null);
@@ -271,6 +290,8 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
       );
       setGeneratedArt(img);
       setWorkflowStep('final_generated');
+      // Auto-advance to Step 4
+      setViewStep(4);
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -278,7 +299,7 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
     }
   };
 
-  // Step 3: Refine Mode Logic
+  // Step 4: Refine Mode Logic
   const handleStartRefine = () => {
       const panels: SubPanel[] = Array.from({ length: panelCount }, (_, i) => ({
           index: i,
@@ -287,6 +308,7 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
       }));
       setSubPanels(panels);
       setWorkflowStep('refine_mode');
+      setViewStep(4); // Ensure we are viewing step 4
       handleGenerateAllPanels(panels);
   };
 
@@ -327,13 +349,14 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
       }
   };
 
-  // Step 4: Generate Captions
+  // Step 5: Generate Captions
   const handleGenerateCaption = async () => {
     if (!activeStrategy) return;
 
     setIsGeneratingCaptions(true);
     setError(null);
     setCaptionOptions([]);
+    setViewStep(5);
 
     try {
       const refinedImages = subPanels
@@ -363,9 +386,57 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
     }
   };
 
-  // --- RENDER ---
-  
-  // 1. Show Platform Selector if not selected (Allows parallel frame loading)
+  // --- RENDER STAGE CONTENT ---
+  const renderRightStage = () => {
+    switch (viewStep) {
+      case 1:
+        // Step 1: Input / Analysis
+        return <Step1Input isGenerating={isAnalyzingSteps} frames={sourceFrames} />;
+      
+      case 2:
+        // Step 2: Base Generation
+        // Shows baseArt if available, or loading state for Step 2
+        return <Step2Base imageSrc={baseArt} isGenerating={isGeneratingImage && !baseArt && !generatedArt} />;
+      
+      case 3:
+        // Step 3: Character Integration
+        // Shows generatedArt (which might be baseArt or integrated art)
+        // If integrating, shows loading state
+        return <Step4Final imageSrc={generatedArt} isGenerating={isGeneratingImage && !!baseArt} />;
+      
+      case 4:
+        // Step 4: Refine Grid
+        return (
+          <Step5Refine
+             subPanels={subPanels}
+             onBatchDownload={handleBatchDownload}
+             onDownloadSingle={handleDownloadImage}
+             onRegenerateSingle={generateSinglePanel}
+           />
+        );
+      
+      case 5:
+        // Step 5: Captions (Visual context is still the Refine Grid or Final Art)
+        // If panels exist, show grid. Else show final art.
+        if (subPanels.length > 0) {
+           return (
+             <Step5Refine
+                subPanels={subPanels}
+                onBatchDownload={handleBatchDownload}
+                onDownloadSingle={handleDownloadImage}
+                onRegenerateSingle={generateSinglePanel}
+              />
+           );
+        } else {
+           return <Step4Final imageSrc={generatedArt} isGenerating={false} />;
+        }
+
+      default:
+        return <Step1Input isGenerating={false} frames={sourceFrames} />;
+    }
+  };
+
+  // 1. Show Platform Selector if not selected
   if (!activeStrategy) {
     return (
       <PlatformSelector 
@@ -375,7 +446,7 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
     );
   }
 
-  // 2. If Platform selected, but frames still loading? Show Loading.
+  // 2. Loading Frames
   if (isLoadingFrames) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md">
@@ -414,6 +485,9 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-0">
         
         <Sidebar
+          viewStep={viewStep}
+          onStepChange={setViewStep}
+          
           workflowStep={workflowStep}
           targetPlatform={activeStrategy}
           videoTitle={videoTitle}
@@ -452,35 +526,12 @@ export const ArtGallery: React.FC<ArtGalleryProps> = ({ tags, videoUrl, videoTit
           copiedIndex={copiedIndex}
           sourceFrames={sourceFrames}
           subPanels={subPanels}
-          defaultPrompt={DEFAULT_PROMPT}
+          defaultPrompt={activeStrategy?.defaultImagePrompt || ''}
         />
 
-        {/* Right Stage: Result */}
+        {/* Right Stage: Result based on View Step */}
         <div className="flex-1 bg-black/20 relative p-4 lg:p-6 flex flex-col min-w-0 order-1 lg:order-2 h-[55vh] lg:h-full overflow-y-auto custom-scrollbar">
-           {workflowStep === 'input' && <Step1Input isGenerating={isGeneratingImage} />}
-           
-           {(workflowStep === 'base_generated' || workflowStep === 'avatar_mode') && (
-             <Step2Base 
-               imageSrc={generatedArt} 
-               isGenerating={isGeneratingImage} 
-             />
-           )}
-           
-           {workflowStep === 'final_generated' && (
-             <Step4Final 
-               imageSrc={generatedArt} 
-               isGenerating={isGeneratingImage} 
-             />
-           )}
-
-           {workflowStep === 'refine_mode' && (
-             <Step5Refine
-               subPanels={subPanels}
-               onBatchDownload={handleBatchDownload}
-               onDownloadSingle={handleDownloadImage}
-               onRegenerateSingle={generateSinglePanel}
-             />
-           )}
+           {renderRightStage()}
         </div>
 
       </div>

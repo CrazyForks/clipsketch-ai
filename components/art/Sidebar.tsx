@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useRef } from 'react';
 import { 
   Loader2, RefreshCw, ListChecks, 
   Plus, Grid3X3, Check, Copy, Wand2, Sparkles, ChevronDown
@@ -10,6 +11,9 @@ import { FrameData, CaptionOption, SubPanel } from '../../services/gemini';
 import { SocialPlatformStrategy } from '../../services/strategies';
 
 interface SidebarProps {
+  viewStep: number;
+  onStepChange: (step: number) => void;
+
   workflowStep: WorkflowStep;
   targetPlatform: SocialPlatformStrategy;
   videoTitle?: string;
@@ -94,33 +98,7 @@ const StepItem: React.FC<StepItemProps> = ({ step, title, isActive, isCompleted,
 };
 
 export const Sidebar: React.FC<SidebarProps> = (props) => {
-  const [activeStep, setActiveStep] = useState<number>(1);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-advance Logic: When analysis is done, jump to step 2
-  const prevAnalyzing = useRef(props.isAnalyzingSteps);
-  useEffect(() => {
-    if (prevAnalyzing.current && !props.isAnalyzingSteps && props.stepDescriptions.length > 0) {
-      setActiveStep(2);
-    }
-    prevAnalyzing.current = props.isAnalyzingSteps;
-  }, [props.isAnalyzingSteps, props.stepDescriptions]);
-
-  // Auto-advance Logic: When generation is done, jump to step 3
-  const prevGenerating = useRef(props.isGeneratingImage);
-  useEffect(() => {
-    if (prevGenerating.current && !props.isGeneratingImage && props.generatedArt) {
-      if (activeStep === 2) setActiveStep(3);
-    }
-    prevGenerating.current = props.isGeneratingImage;
-  }, [props.isGeneratingImage, props.generatedArt, activeStep]);
-
-  // Handle Retry Reset: If Step 1 result is cleared, force Step 1 active
-  useEffect(() => {
-    if (props.stepDescriptions.length === 0) {
-      setActiveStep(1);
-    }
-  }, [props.stepDescriptions.length]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     props.onAvatarUpload(e);
@@ -137,10 +115,10 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
         <StepItem 
           step={1} 
           title="创意分析" 
-          isActive={activeStep === 1}
+          isActive={props.viewStep === 1}
           isCompleted={props.stepDescriptions.length > 0}
           isDisabled={false} 
-          onToggle={() => setActiveStep(1)}
+          onToggle={() => props.onStepChange(1)}
         >
           <div>
             <label className="text-[10px] text-slate-500 block mb-1">
@@ -150,19 +128,6 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
               value={props.contextDescription}
               onChange={(e) => props.setContextDescription(e.target.value)}
               placeholder="输入背景故事..."
-              className="w-full h-14 bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none placeholder-slate-700 custom-scrollbar mb-3"
-              disabled={props.isGeneratingImage || props.isAnalyzingSteps}
-            />
-            
-            <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] text-slate-500">提示词 (Prompt)</label>
-                {!props.isGeneratingImage && !props.isAnalyzingSteps && (
-                  <button onClick={() => props.setCustomPrompt(props.defaultPrompt)} className="text-[10px] text-indigo-400 hover:text-indigo-300">重置</button>
-                )}
-            </div>
-            <textarea
-              value={props.customPrompt}
-              onChange={(e) => props.setCustomPrompt(e.target.value)}
               className="w-full h-14 bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none placeholder-slate-700 custom-scrollbar mb-3"
               disabled={props.isGeneratingImage || props.isAnalyzingSteps}
             />
@@ -198,14 +163,28 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
           <StepItem 
             step={2} 
             title="画面生成" 
-            isActive={activeStep === 2}
+            isActive={props.viewStep === 2}
             isCompleted={!!props.generatedArt}
             isDisabled={false}
-            onToggle={() => setActiveStep(2)}
+            onToggle={() => props.onStepChange(2)}
           >
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
               AI 将根据分析结果绘制基础分镜。
             </p>
+            
+            <div className="flex justify-between items-center mb-1">
+                <label className="text-[10px] text-slate-500">提示词 (Prompt)</label>
+                {!props.isGeneratingImage && !props.isAnalyzingSteps && (
+                  <button onClick={() => props.setCustomPrompt(props.defaultPrompt)} className="text-[10px] text-indigo-400 hover:text-indigo-300">重置</button>
+                )}
+            </div>
+            <textarea
+              value={props.customPrompt}
+              onChange={(e) => props.setCustomPrompt(e.target.value)}
+              className="w-full h-14 bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none placeholder-slate-700 custom-scrollbar mb-3"
+              disabled={props.isGeneratingImage || props.isAnalyzingSteps}
+            />
+
             <Button 
               onClick={props.onGenerateBase}
               disabled={props.isGeneratingImage}
@@ -239,10 +218,10 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             <StepItem 
               step={3} 
               title="角色融合 (可选)" 
-              isActive={activeStep === 3}
+              isActive={props.viewStep === 3}
               isCompleted={props.workflowStep === 'final_generated' || props.workflowStep === 'refine_mode'}
               isDisabled={!props.generatedArt}
-              onToggle={() => props.generatedArt && setActiveStep(3)}
+              onToggle={() => props.generatedArt && props.onStepChange(3)}
             >
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -274,7 +253,7 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
                 {props.avatarImage && (
                   <div>
                     <label className="text-[10px] text-slate-500 flex items-center gap-1 mb-1">
-                        个姓水印
+                        个性水印
                     </label>
                     <input
                       type="text"
@@ -306,10 +285,10 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             <StepItem 
               step={4} 
               title="分镜精修" 
-              isActive={activeStep === 4}
+              isActive={props.viewStep === 4}
               isCompleted={completedRefineCount > 0}
               isDisabled={!props.generatedArt}
-              onToggle={() => props.generatedArt && setActiveStep(4)}
+              onToggle={() => props.generatedArt && props.onStepChange(4)}
             >
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -340,10 +319,10 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             <StepItem 
               step={5} 
               title="社交文案" 
-              isActive={activeStep === 5}
+              isActive={props.viewStep === 5}
               isCompleted={props.captionOptions.length > 0}
               isDisabled={!props.generatedArt}
-              onToggle={() => props.generatedArt && setActiveStep(5)}
+              onToggle={() => props.generatedArt && props.onStepChange(5)}
             >
               <Button 
                 onClick={props.onGenerateCaptions}

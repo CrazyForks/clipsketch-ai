@@ -1,4 +1,5 @@
 
+
 import { BookHeart, Instagram, LucideIcon, Globe } from 'lucide-react';
 
 export interface SocialPlatformStrategy {
@@ -7,6 +8,7 @@ export interface SocialPlatformStrategy {
   description: string;
   icon: LucideIcon;
   primaryColorClass: string; // e.g., 'text-pink-500'
+  defaultImagePrompt: string; // Default prompt for the strategy
   
   // Prompt Generation Methods
   getStepAnalysisInstruction(): string;
@@ -20,6 +22,7 @@ class XiaohongshuStrategy implements SocialPlatformStrategy {
   description = '面向中国用户。生成中文文案、种草风格、Emoji 和中文步骤说明。';
   icon = BookHeart;
   primaryColorClass = 'text-pink-500';
+  defaultImagePrompt = `将这些图片转换为可爱的、手绘风格的插图，以描绘整个过程。要有明显的手绘风格，主体的形状和颜色不应有太大变化，要真实反映原图像本身的特性。每一步的插图应尽可能独立且完整，并且小图片之间应有足够的间距。为每个步骤编号，并用简短描述。除了步骤描述外，不要添加任何不必要的文字。每一步的插图和整体插图都要以纯白色为背景`;
 
   getStepAnalysisInstruction(): string {
     return "Provide a concise description in **Simplified Chinese** (中文).";
@@ -64,6 +67,7 @@ class InstagramStrategy implements SocialPlatformStrategy {
   description = '面向英美用户。生成英文文案、Aesthetic 风格、Hashtags 和英文步骤说明。';
   icon = Instagram;
   primaryColorClass = 'text-purple-500';
+  defaultImagePrompt = `Convert these images into cute, hand-drawn style illustrations to depict the process. Maintain a distinct hand-drawn style while keeping the subject's shape and color true to the original. Each step's illustration should be independent and complete, with sufficient spacing between them. Number each step with a short description. Do not add unnecessary text. Use a pure white background.`;
 
   getStepAnalysisInstruction(): string {
     return "Provide a concise, native **English** description.";

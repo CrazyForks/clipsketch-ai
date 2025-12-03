@@ -140,56 +140,71 @@ class XiaohongshuParser implements VideoParser {
   }
 }
 
-// --- Instagram Parser (Cobalt API) ---
+// --- Instagram Parser ---
 class InstagramParser implements VideoParser {
   name = 'Instagram';
 
   canHandle(url: string): boolean {
-    return url.includes('instagram.com');
+    return url.includes('instagram.com') || url.includes('instagr.am');
   }
 
   async parse(url: string): Promise<VideoMetadata> {
-    console.log(`Instagram: Parsing via Cobalt API...`);
-    
-    const response = await fetch('https://api.cobalt.tools/api/json', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        url: url,
-        vQuality: 'max',
-        filenamePattern: 'basic',
-        isAudioOnly: false
-      })
-    });
-
-    const data = await response.json();
-
-    if (data.status === 'error') {
-      throw new Error(data.text || "Instagram parsing failed");
+    // 1. Clean URL: Remove query params for cleaner payload
+    let cleanUrl = url;
+    try {
+        const urlObj = new URL(url);
+        cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
+    } catch (e) {
+        cleanUrl = url.split('?')[0];
     }
 
-    if (data.url) {
-      return {
-        url: data.url,
-        title: "Instagram Reel",
-        content: "Imported from Instagram",
-        duration: undefined 
-      };
-    } else if (data.picker && data.picker.length > 0) {
-      const firstVideo = data.picker.find((item: any) => item.type === 'video');
-      if (firstVideo && firstVideo.url) {
-         return {
-           url: firstVideo.url,
-           title: "Instagram Post",
-           content: "Imported from Instagram"
-         };
-      }
+    // 2. Call iiilab API via Proxy
+    // The browser prevents setting Origin/Referer headers directly in fetch.
+    // However, we include the critical custom headers required by the API.
+    const endpoint = 'https://service.iiilab.com/iiilab/extract';
+    const proxyUrl = `${PROXY_BASE}${encodeURIComponent(endpoint)}`;
+
+    try {
+        console.log(`Instagram: Parsing via iiilab...`);
+        const response = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'g-footer': '68d153a07fac84c3498031aaea996ae9',
+                'g-timestamp': '1764759546'
+            },
+            body: JSON.stringify({
+                url: cleanUrl,
+                site: 'instagram'
+            })
+        });
+
+        if (!response.ok) {
+             throw new Error(`API responded with ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // 3. Extract Video
+        // Structure: { medias: [ { media_type: 'video', resource_url: '...' } ], text: '...' }
+        if (data.medias && Array.isArray(data.medias)) {
+            const videoItem = data.medias.find((item: any) => item.media_type === 'video');
+            if (videoItem && videoItem.resource_url) {
+                return {
+                    url: videoItem.resource_url,
+                    title: "Instagram Video",
+                    content: data.text || "Imported from Instagram"
+                };
+            }
+        }
+        
+        throw new Error("No video found in response");
+
+    } catch (e: any) {
+        console.warn(`Instagram parse failed:`, e);
+        throw new Error("Instagram parsing failed. Please check if the link is valid.");
     }
-    
-    throw new Error("No video found in Instagram link");
   }
 }
 
@@ -292,7 +307,7 @@ class GenericParser implements VideoParser {
 
 // Registry
 const parsers: VideoParser[] = [
-  new XiaohongshuParser(), // Add new parser
+  new XiaohongshuParser(), 
   new InstagramParser(),
   new BilibiliParser(),
   new GenericParser() // Must be last

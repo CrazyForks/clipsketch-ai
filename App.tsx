@@ -371,7 +371,7 @@ export default function App() {
                             <h3 className="text-xl md:text-2xl font-semibold text-white">开始新创作</h3>
                             </div>
                             <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-                            支持 <span className="text-pink-400 font-medium">小红书</span> 或 <span className="text-blue-400 font-medium">Bilibili</span> 链接。
+                            支持 <span className="text-pink-400 font-medium">小红书</span>、<span className="text-blue-400 font-medium">Bilibili</span> 或 <span className="text-purple-500 font-medium">Instagram</span> 链接。
                             </p>
                         </div>
 
